@@ -21,9 +21,14 @@ async function getTransporter() {
     const emailPass = process.env.EMAIL_PASS.trim();
     transporterPromise = Promise.resolve(
       nodemailer.createTransport({
-        service: "gmail",
-        auth: { user: emailUser, pass: emailPass },
-      })
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
+  auth: {
+    user: emailUser,
+    pass: emailPass,
+  },
+})
     );
     return transporterPromise;
   }
