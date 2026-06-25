@@ -10,6 +10,7 @@ function hasRealGmailCredentials() {
   if (!emailUser || !emailPass) return false;
   if (emailUser.includes("your-gmail")) return false;
   if (emailPass.includes("your-app-password")) return false;
+
   return true;
 }
 
@@ -22,10 +23,7 @@ async function getTransporter() {
 
     transporterPromise = Promise.resolve(
       nodemailer.createTransport({
-        host: "smtp.gmail.com",
-        port: 587,
-        secure: false,
-        requireTLS: true,
+        service: "gmail",
         auth: {
           user: emailUser,
           pass: emailPass,
@@ -63,15 +61,17 @@ async function sendOtpEmail(email, otp) {
   const mailOptions = {
     from:
       process.env.EMAIL_FROM ||
-      "Krafton India Esports <no-reply@krafton-esports.local>",
+      "Krafton India Esports <wackyop15@gmail.com>",
     to: email,
     subject: "Your BGMI Tournament Verification OTP",
     text: `Your OTP is ${otp}. It is valid for 10 minutes.`,
     html: `
-      <div style="font-family:Arial,sans-serif;line-height:1.6">
+      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
         <h2>BGMI Tournament Verification</h2>
         <p>Your one-time password is:</p>
-        <p style="font-size:28px;font-weight:700;letter-spacing:4px">${otp}</p>
+        <p style="font-size: 28px; font-weight: 700; letter-spacing: 4px;">
+          ${otp}
+        </p>
         <p>This OTP is valid for 10 minutes.</p>
       </div>
     `,
