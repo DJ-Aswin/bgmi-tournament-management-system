@@ -73,9 +73,14 @@ async function sendOtpEmail(email, otp) {
   } catch (primaryError) {
   console.error("PRIMARY EMAIL ERROR:", primaryError);
 
-  const fallbackTransporter = await getFallbackTransporter();
-  info = await fallbackTransporter.sendMail(mailOptions);
+  try {
+    const fallbackTransporter = await getFallbackTransporter();
+    info = await fallbackTransporter.sendMail(mailOptions);
+  } catch (fallbackError) {
+    console.error("FALLBACK EMAIL ERROR:", fallbackError);
+    throw fallbackError;
   }
+}
 
   const preview = nodemailer.getTestMessageUrl(info);
   return preview || null;
