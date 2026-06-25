@@ -3,7 +3,7 @@ import axios from "axios";
 import { Link, NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import "./App.css";
 
-const API_BASE_URL = "https://bgmi-tournament-management-system.onrender.com";
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 const GAME_MODES = ["squad-tpp", "squad-fpp", "duo-tpp", "duo-fpp", "solo-tpp", "solo-fpp"];
 
 function humanizePlayerApplicationStatus(status) {
