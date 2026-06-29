@@ -12,21 +12,21 @@ async function sendOtpEmail(email, otp) {
 
   sendSmtpEmail.sender = {
     name: "ArenaHub",
-    email: process.env.EMAIL_FROM || "aswin.d.ciet@gmail.com",
+    email: process.env.EMAIL_FROM,
   };
 
   sendSmtpEmail.to = [
     {
-      email: email,
+      email,
     },
   ];
 
   sendSmtpEmail.subject = "Your BGMI Tournament Verification OTP";
 
   sendSmtpEmail.htmlContent = `
-    <div style="font-family:Arial,sans-serif;line-height:1.6">
+    <div style="font-family:Arial,sans-serif">
       <h2>BGMI Tournament Verification</h2>
-      <p>Your one-time password is:</p>
+      <p>Your OTP is:</p>
       <h1>${otp}</h1>
       <p>This OTP is valid for 10 minutes.</p>
     </div>
@@ -36,10 +36,10 @@ async function sendOtpEmail(email, otp) {
 
   try {
     await apiInstance.sendTransacEmail(sendSmtpEmail);
-    console.log("OTP email sent successfully.");
-  } catch (error) {
-    console.error("BREVO API ERROR:", error);
-    throw error;
+    return null;
+  } catch (err) {
+    console.error("BREVO ERROR:", err);
+    throw err;
   }
 }
 
