@@ -1,52 +1,44 @@
-const nodemailer = require("nodemailer");
+const brevo = require("@getbrevo/brevo");
 
-let transporterPromise;
+const apiInstance = new brevo.TransactionalEmailsApi();
 
-async function getTransporter() {
-  if (transporterPromise) return transporterPromise;
-
-  const emailUser = (process.env.EMAIL_USER || "").trim();
-  const emailPass = (process.env.EMAIL_PASS || "").trim();
-
-  transporterPromise = Promise.resolve(
-    nodemailer.createTransport({
-      host: "smtp-relay.brevo.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: emailUser,
-        pass: emailPass,
-      },
-    })
-  );
-
-  return transporterPromise;
-}
+apiInstance.setApiKey(
+  brevo.TransactionalEmailsApiApiKeys.apiKey,
+  process.env.BREVO_API_KEY
+);
 
 async function sendOtpEmail(email, otp) {
-  const mailOptions = {
-    from:
-      process.env.EMAIL_FROM ||
-      `ArenaHub <${process.env.EMAIL_USER}>`,
-    to: email,
-    subject: "Your BGMI Tournament Verification OTP",
-    text: `Your OTP is ${otp}. It is valid for 10 minutes.`,
-    html: `
-      <div style="font-family:Arial,sans-serif;line-height:1.6">
-        <h2>BGMI Tournament Verification</h2>
-        <p>Your one-time password is:</p>
-        <p style="font-size:28px;font-weight:700;letter-spacing:4px">${otp}</p>
-        <p>This OTP is valid for 10 minutes.</p>
-      </div>
-    `,
+  const sendSmtpEmail = new brevo.SendSmtpEmail();
+
+  sendSmtpEmail.sender = {
+    name: "ArenaHub",
+    email: process.env.EMAIL_FROM || "aswin.d.ciet@gmail.com",
   };
 
+  sendSmtpEmail.to = [
+    {
+      email: email,
+    },
+  ];
+
+  sendSmtpEmail.subject = "Your BGMI Tournament Verification OTP";
+
+  sendSmtpEmail.htmlContent = `
+    <div style="font-family:Arial,sans-serif;line-height:1.6">
+      <h2>BGMI Tournament Verification</h2>
+      <p>Your one-time password is:</p>
+      <h1>${otp}</h1>
+      <p>This OTP is valid for 10 minutes.</p>
+    </div>
+  `;
+
+  sendSmtpEmail.textContent = `Your OTP is ${otp}. It is valid for 10 minutes.`;
+
   try {
-    const transporter = await getTransporter();
-    await transporter.sendMail(mailOptions);
-    return null;
+    await apiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log("OTP email sent successfully.");
   } catch (error) {
-    console.error("EMAIL ERROR:", error);
+    console.error("BREVO API ERROR:", error);
     throw error;
   }
 }
