@@ -5,7 +5,6 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const db = require("./db");
 const { sendOtpEmail } = require("./mailer");
-const { getPastTournaments, getFeaturedEvents } = require("./kraftonFeed");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -68,21 +67,49 @@ function requireRole(role) {
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-app.get("/api/public/krafton/past-tournaments", async (_req, res) => {
+const ACTIVE_EVENT_FILTER = `COALESCE(t.status, 'active') = 'active' AND date(t.start_date) >= date('now')`;
+const PAST_TOURNAMENT_FILTER = `LOWER(t.category) = 'tournament' AND COALESCE(t.status, 'active') != 'cancelled' AND date(t.start_date) < date('now')`;
+
+app.get("/api/public/past-tournaments", async (_req, res) => {
   try {
-    const tournaments = await getPastTournaments();
-    res.json({ tournaments, source: "kraftonindiaesports.com" });
+    const rows = await dbAll(
+      `SELECT t.id, t.title, t.game_mode, t.start_date, t.prize_pool, t.match_count,
+       (SELECT COUNT(*) FROM tournament_applications a WHERE a.tournament_id = t.id AND a.status = 'approved') AS approved_teams
+       FROM tournaments t
+       WHERE ${PAST_TOURNAMENT_FILTER}
+       ORDER BY t.start_date DESC, t.created_at DESC
+       LIMIT 12`
+    );
+    const tournaments = rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      subtitle: [row.game_mode?.replace(/-/g, " ").toUpperCase(), row.prize_pool ? `Prize: ${row.prize_pool}` : null]
+        .filter(Boolean)
+        .join(" · "),
+      dates: row.start_date,
+      game_mode: row.game_mode,
+      approved_teams: Number(row.approved_teams) || 0,
+    }));
+    res.json({ tournaments });
   } catch (error) {
-    res.status(500).json({ message: "Could not load Krafton past tournaments.", error: error.message });
+    res.status(500).json({ message: "Could not load past tournaments.", error: error.message });
   }
 });
 
-app.get("/api/public/krafton/featured-events", async (_req, res) => {
+app.get("/api/public/featured-tournaments", async (_req, res) => {
   try {
-    const events = await getFeaturedEvents();
-    res.json({ events, source: "kraftonindiaesports.com" });
+    const tournaments = await dbAll(
+      `SELECT t.id, t.title, t.game_mode, t.start_date, t.max_teams, t.min_id_level, t.prize_pool,
+       (SELECT COUNT(*) FROM tournament_applications a WHERE a.tournament_id = t.id AND a.status IN ('applied','approved')) AS used_slots
+       FROM tournaments t
+       WHERE LOWER(t.category) = 'tournament'
+       AND ${ACTIVE_EVENT_FILTER}
+       ORDER BY used_slots DESC, t.start_date ASC, t.created_at DESC
+       LIMIT 8`
+    );
+    res.json({ tournaments });
   } catch (error) {
-    res.status(500).json({ message: "Could not load Krafton featured events.", error: error.message });
+    res.status(500).json({ message: "Could not load featured tournaments.", error: error.message });
   }
 });
 
@@ -93,7 +120,7 @@ app.get("/api/public/popular-scrims", async (_req, res) => {
       (SELECT COUNT(*) FROM tournament_applications a WHERE a.tournament_id = t.id AND a.status IN ('applied','approved')) AS used_slots
        FROM tournaments t
        WHERE LOWER(t.category) = 'scrim'
-       AND COALESCE(t.status, 'active') != 'cancelled'
+       AND ${ACTIVE_EVENT_FILTER}
        ORDER BY used_slots DESC, t.created_at DESC
        LIMIT 8`
     );

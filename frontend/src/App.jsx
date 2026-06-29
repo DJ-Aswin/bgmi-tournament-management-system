@@ -16,14 +16,11 @@ function humanizePlayerApplicationStatus(status) {
 }
 
 const LANDING_HERO_SLIDES = [
-  { src: "Firefly.jpg", alt: "2026 esports roadmap" },
-  { src: "slide.jpg", alt: "KRAFTON India Esports highlight" },
+  { src: "/Firefly.jpg", alt: "BGMI ArenaHub Hero" },
+  { src: "/slide.jpg", alt: "BGMI ArenaHub Arena" },
 ];
 
-const HERO_SLIDE_INTERVAL_MS = 6500;
-
-/** Official KRAFTON India esports site — images and live feed source. */
-const KRAFTON_ESPORTS_ORIGIN = "https://kraftonindiaesports.com";
+const DEFAULT_TOURNAMENT_BANNER = "/bgis2026.png";
 
 function ordinalDay(n) {
   const j = n % 10;
@@ -33,6 +30,33 @@ function ordinalDay(n) {
   if (j === 2) return `${n}nd`;
   if (j === 3) return `${n}rd`;
   return `${n}th`;
+}
+
+const HERO_SLIDE_INTERVAL_MS = 6500;
+
+function formatPastTournamentDate(iso) {
+  if (!iso || typeof iso !== "string") return "";
+  const d = new Date(iso.includes("T") ? iso : `${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${ordinalDay(d.getDate())} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function mapEventToRailCard(item, { kind }) {
+  const entryType =
+    kind === "scrim" ? "Open scrim" : item.prize_pool ? `Prize: ${item.prize_pool}` : "Open registration";
+  const base = import.meta.env.BASE_URL;
+  return {
+    key: `${kind}-${item.id}`,
+    title: item.title,
+    entryType,
+    datesLine: formatApiScrimDateLine(item.start_date),
+    image: DEFAULT_TOURNAMENT_BANNER,
+    meta:
+      item.max_teams != null
+        ? `${item.used_slots}/${item.max_teams} teams · ${String(item.game_mode).replace(/-/g, " ").toUpperCase()}`
+        : `${item.used_slots} teams · ${String(item.game_mode).replace(/-/g, " ").toUpperCase()}`,
+  };
 }
 
 function formatApiScrimDateLine(iso) {
@@ -556,13 +580,13 @@ function PastTournamentsSlideshow({ slides }) {
     <div
       className="tournament-slideshow"
       aria-roledescription="carousel"
-      aria-label="Past official tournaments"
+      aria-label="Past ArenaHub tournaments"
       aria-live="polite"
     >
       <div className="tournament-slideshow-viewport">
         {slides.map((slide, i) => (
           <article
-            key={slide.title}
+            key={slide.key ?? slide.title}
             className={`tournament-slide ${i === index ? "tournament-slide--active" : ""}`}
             aria-hidden={i !== index}
             aria-label={`${slide.title}. ${slide.subtitle}. ${slide.dates}.`}
@@ -608,13 +632,6 @@ function PastTournamentsSlideshow({ slides }) {
           </>
         ) : null}
       </div>
-      <p className="tournament-attribution">
-        Tournament visuals from{" "}
-        <a href={KRAFTON_ESPORTS_ORIGIN} target="_blank" rel="noreferrer noopener">
-          KRAFTON ESPORTS
-        </a>
-        .
-      </p>
     </div>
   );
 }
@@ -647,12 +664,12 @@ function HeroSlideshow({ slides }) {
       <div className="hero-slideshow-viewport">
         {slides.map((slide, i) => (
           <img
-            key={slide.src}
-            src={`${base}${slide.src}`}
-            alt={slide.alt}
-            className={`hero-slide-img ${i === index ? "hero-slide-img--active" : ""}`}
-            decoding={i === 0 ? "sync" : "async"}
-          />
+  key={slide.src}
+  src={slide.src}
+  alt={slide.alt}
+  className={`hero-slide-img ${i === index ? "hero-slide-img--active" : ""}`}
+  decoding={i === 0 ? "sync" : "async"}
+/>
         ))}
         {slides.length > 1 ? (
           <div className="hero-slideshow-dots" role="tablist" aria-label="Slide indicators">
@@ -791,93 +808,67 @@ function UserAccountMenu({ session, onLogout }) {
 function HomePage({ session, setSession }) {
   const navigate = useNavigate();
   const [popularScrims, setPopularScrims] = useState([]);
+  const [featuredTournaments, setFeaturedTournaments] = useState([]);
   const [scrimsLoadError, setScrimsLoadError] = useState(false);
+  const [featuredLoadError, setFeaturedLoadError] = useState(false);
   const [pastTournaments, setPastTournaments] = useState([]);
-  const [kraftonEvents, setKraftonEvents] = useState([]);
-  const [kraftonLoadError, setKraftonLoadError] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    axios
-      .get(`${API_BASE_URL}/api/public/popular-scrims`)
-      .then(({ data }) => {
-        if (!cancelled) {
-          setPopularScrims(data.scrims || []);
-          setScrimsLoadError(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPopularScrims([]);
-          setScrimsLoadError(true);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const [pastLoadError, setPastLoadError] = useState(false);
+  const [homeLoading, setHomeLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      axios.get(`${API_BASE_URL}/api/public/krafton/past-tournaments`),
-      axios.get(`${API_BASE_URL}/api/public/krafton/featured-events`),
+      axios.get(`${API_BASE_URL}/api/public/popular-scrims`),
+      axios.get(`${API_BASE_URL}/api/public/featured-tournaments`),
+      axios.get(`${API_BASE_URL}/api/public/past-tournaments`),
     ])
-      .then(([pastRes, featuredRes]) => {
+      .then(([scrimsRes, featuredRes, pastRes]) => {
         if (cancelled) return;
+        setPopularScrims(scrimsRes.data.scrims || []);
+        setFeaturedTournaments(featuredRes.data.tournaments || []);
         setPastTournaments(pastRes.data.tournaments || []);
-        setKraftonEvents(featuredRes.data.events || []);
-        setKraftonLoadError(false);
+        setScrimsLoadError(false);
+        setFeaturedLoadError(false);
+        setPastLoadError(false);
       })
       .catch(() => {
         if (!cancelled) {
+          setPopularScrims([]);
+          setFeaturedTournaments([]);
           setPastTournaments([]);
-          setKraftonEvents([]);
-          setKraftonLoadError(true);
+          setScrimsLoadError(true);
+          setFeaturedLoadError(true);
+          setPastLoadError(true);
         }
+      })
+      .finally(() => {
+        if (!cancelled) setHomeLoading(false);
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const pastTournamentSlides = useMemo(
-    () =>
-      pastTournaments
-        .filter((t) => t.image)
-        .map((t) => ({
-          title: t.title,
-          subtitle: t.subtitle || "",
-          dates: t.dates || "",
-          image: t.image,
-        })),
-    [pastTournaments]
+  const pastTournamentSlides = useMemo(() => {
+    const base = import.meta.env.BASE_URL;
+    return pastTournaments.map((t, index) => ({
+      title: t.title,
+      subtitle: t.subtitle || `${String(t.game_mode || "").replace(/-/g, " ").toUpperCase()} · ${t.approved_teams ?? 0} teams approved`,
+      dates: formatPastTournamentDate(t.dates || t.start_date),
+      image: t.image || DEFAULT_TOURNAMENT_BANNER,
+      key: t.id ?? index,
+    }));
+  }, [pastTournaments]);
+
+  const scrimRailCards = useMemo(
+    () => popularScrims.map((s) => mapEventToRailCard(s, { kind: "scrim" })),
+    [popularScrims]
   );
 
-  const scrimRailCards = useMemo(() => {
-    const apiPart = popularScrims.map((s) => ({
-      key: `api-${s.id}`,
-      title: s.title,
-      entryType: "Open",
-      datesLine: formatApiScrimDateLine(s.start_date),
-      image: null,
-      meta:
-        s.max_teams != null
-          ? `${s.used_slots}/${s.max_teams} teams · ${String(s.game_mode).replace(/-/g, " ").toUpperCase()}`
-          : `${s.used_slots} teams · ${String(s.game_mode).replace(/-/g, " ").toUpperCase()}`,
-    }));
-    const kraftonPart = kraftonEvents
-      .filter((e) => e.image)
-      .map((e) => ({
-        key: `krafton-${e.id}`,
-        title: e.title,
-        entryType: e.entryType || "Open",
-        datesLine: e.datesLine,
-        image: e.image,
-        meta: null,
-      }));
-    return [...apiPart, ...kraftonPart];
-  }, [popularScrims, kraftonEvents]);
+  const featuredRailCards = useMemo(
+    () => featuredTournaments.map((t) => mapEventToRailCard(t, { kind: "tournament" })),
+    [featuredTournaments]
+  );
 
   const roleActionLabel = session?.user?.role === "player" ? "Find Tournament/Scrims" : "Organize Tournament/Scrims";
   const roleActionPath = session?.user?.role === "player" ? "/player" : "/organizer";
@@ -916,17 +907,15 @@ function HomePage({ session, setSession }) {
         <section className="popular-panel past-tournaments-panel">
           <h2 className="section-heading-krafton">Past tournaments</h2>
           <p className="section-lead">
-            Official KRAFTON India esports seasons — slideshow synced from the{" "}
-            <a className="inline-krafton-link" href={KRAFTON_ESPORTS_ORIGIN} target="_blank" rel="noreferrer noopener">
-              KRAFTON ESPORTS
-            </a>{" "}
-            site (same banners and thumbnails as their past-tournaments feed).
+            Completed ArenaHub tournaments — events that have finished appear here automatically once their start date has passed.
           </p>
-          {kraftonLoadError ? (
-            <p className="scrims-empty scrims-empty--banner">Could not load live Krafton tournaments right now.</p>
+          {pastLoadError ? (
+            <p className="scrims-empty scrims-empty--banner">Could not load past tournaments right now.</p>
           ) : null}
-          {!kraftonLoadError && pastTournamentSlides.length === 0 ? (
+          {!pastLoadError && homeLoading ? (
             <p className="scrims-empty">Loading past tournaments…</p>
+          ) : !pastLoadError && pastTournamentSlides.length === 0 ? (
+            <p className="scrims-empty">No completed tournaments yet. Finished events will show up here after their start date.</p>
           ) : (
             <PastTournamentsSlideshow slides={pastTournamentSlides} />
           )}
@@ -935,19 +924,15 @@ function HomePage({ session, setSession }) {
         <section className="popular-panel scrims-panel scrims-panel--krafton">
           <h2 className="section-heading-krafton">Popular scrims</h2>
           <p className="section-lead scrims-panel-lead">
-            ArenaHub live scrims plus featured events from{" "}
-            <a className="inline-krafton-link" href={KRAFTON_ESPORTS_ORIGIN} target="_blank" rel="noreferrer noopener">
-              KRAFTON ESPORTS
-            </a>{" "}
-            — same card layout and artwork as their homepage events rail.
+            Active scrims hosted on ArenaHub — register as a player to apply for open slots.
           </p>
           {scrimsLoadError ? (
-            <p className="scrims-empty scrims-empty--banner">Could not load live ArenaHub scrims; Krafton events are still shown below.</p>
+            <p className="scrims-empty scrims-empty--banner">Could not load live ArenaHub scrims right now.</p>
           ) : null}
-          {kraftonLoadError && scrimRailCards.length === 0 ? (
-            <p className="scrims-empty scrims-empty--banner">Could not load event cards right now.</p>
-          ) : scrimRailCards.length === 0 ? (
-            <p className="scrims-empty">Loading events…</p>
+          {!scrimsLoadError && homeLoading ? (
+            <p className="scrims-empty">Loading scrims…</p>
+          ) : !scrimsLoadError && scrimRailCards.length === 0 ? (
+            <p className="scrims-empty">No active scrims right now. Organizers can post new scrims from the dashboard.</p>
           ) : (
             <PopularScrimsRail cards={scrimRailCards} session={session} navigate={navigate} />
           )}
@@ -958,6 +943,28 @@ function HomePage({ session, setSession }) {
             {" "}
             <button type="button" className="link-as-button" onClick={() => navigate("/signup")}>
               Organizer signup
+            </button>
+          </p>
+        </section>
+
+        <section className="popular-panel scrims-panel scrims-panel--krafton">
+          <h2 className="section-heading-krafton">Featured tournaments</h2>
+          <p className="section-lead scrims-panel-lead">
+            Upcoming ArenaHub tournaments with open registrations — sorted by community interest.
+          </p>
+          {featuredLoadError ? (
+            <p className="scrims-empty scrims-empty--banner">Could not load featured tournaments right now.</p>
+          ) : null}
+          {!featuredLoadError && homeLoading ? (
+            <p className="scrims-empty">Loading tournaments…</p>
+          ) : !featuredLoadError && featuredRailCards.length === 0 ? (
+            <p className="scrims-empty">No upcoming tournaments right now. Check back soon or browse all listings.</p>
+          ) : (
+            <PopularScrimsRail cards={featuredRailCards} session={session} navigate={navigate} />
+          )}
+          <p className="scrims-footnote">
+            <button type="button" className="link-as-button" onClick={() => navigate("/tournaments")}>
+              View all tournaments &amp; scrims
             </button>
           </p>
         </section>
